@@ -17,17 +17,26 @@ class GroceryListScreen extends StatefulWidget {
 
 class _GroceryListScreenState extends State<GroceryListScreen> {
   List<GroceryItem> _groceryItems = [];
-  var _isLoading = true;
-
+  // var _isLoading = true;
+  late Future<List<GroceryItem>> _loadedItems;
   String? _error;
-  void _loadItems() async {
+  Future<List<GroceryItem>> _loadItems() async {
     final url = Uri.https(
         "shopiii-13c19-default-rtdb.firebaseio.com", 'shopping-list.json');
+
     final response = await http.get(url);
     if (response.statusCode >= 400) {
-      setState(() {
-        _error = "Failed to fetch data. please try again later";
-      });
+      // setState(() {
+      //   _error = "Failed to fetch data. please try again later";
+      // });
+      throw Exception("Failed to fetch data. please try again later");
+    }
+
+    if (response.body == "null") {
+      // setState(() {
+      //   _isLoading = false;
+      // });
+      return [];
     }
     final List<GroceryItem> loadedItems = [];
     final Map<String, dynamic> listData = json.decode(response.body);
@@ -46,8 +55,9 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
     }
     setState(() {
       _groceryItems = loadedItems;
-      _isLoading = false;
+      // _isLoading = false;
     });
+    return loadedItems;
   }
 
   void _addItem() async {
@@ -66,22 +76,39 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
   }
 
   void _removeItem(GroceryItem item) async {
-    final url = Uri.https("shopiii-13c19-default-rtdb.firebaseio.com",
-        'shopping-list/${item.id}.json');
-    final response = await http.delete(url);
-    if (response) {
-      
-    }
+    final index = _groceryItems.indexOf(item);
     setState(() {
       _groceryItems.remove(item);
     });
+    final url = Uri.https("shopiii-13c19-default-rtdb.firebaseio.com",
+        'shopping-list/${item.id}.json');
+    final response = await http.delete(url);
+    if (response.statusCode >= 400) {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Oups !!! Veillez réessayer la suppression"),
+        ),
+      );
+      setState(() {
+        _groceryItems.insert(index, item);
+      });
+      return;
+    }
+
+    // ignore: use_build_context_synchronously
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Grocery has been deleted"),
+      ),
+    );
   }
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    _loadItems();
+    _loadedItems = _loadItems();
   }
 
   @override
@@ -89,11 +116,9 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
     Widget content = const Center(
       child: Text("Oups ! no grociries in your store"),
     );
-    if (_isLoading) {
-      content = const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
+    // if (_isLoading) {
+    //   content =
+    // }
     if (_groceryItems.isNotEmpty) {
       content = ListView.builder(
           itemCount: _groceryItems.length,
@@ -114,6 +139,31 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
             IconButton(onPressed: _addItem, icon: const Icon(Icons.add))
           ],
         ),
-        body: content);
+        body: FutureBuilder(
+            future: _loadedItems,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(snapshot.error.toString()),
+                );
+              }
+              if (snapshot.data!.isEmpty) {
+                return const Center(
+                  child: Text("Oups ! no grociries in your store"),
+                );
+              } else {
+                return ListView.builder(
+                    itemCount: snapshot.data!.length,
+                    itemBuilder: (ctx, index) {
+                      final item = snapshot.data![index];
+                      return GroceryItemScreen(item, _removeItem);
+                    });
+              }
+            }));
   }
 }

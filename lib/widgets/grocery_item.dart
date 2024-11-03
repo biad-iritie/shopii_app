@@ -12,11 +12,6 @@ class GroceryItemScreen extends StatelessWidget {
       direction: DismissDirection.endToStart,
       onDismissed: (direction) {
         onRemove(grocery);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Grocery has been deleted"),
-          ),
-        );
       },
       background: Container(
         color: Colors.red,
